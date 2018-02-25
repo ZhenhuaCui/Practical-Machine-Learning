@@ -1,0 +1,115 @@
+---
+title: "Practical machine learning project"
+author: "ZC"
+date: "Feb 19, 2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Background  
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).  
+  
+# Data  
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.  
+  
+# What you should submit
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.  
+
+# Data preparation  
+##Reproduceability  
+
+An overall pseudo-random number generator seed was set at 113 for all code. In order to reproduce the results below, the same seed should be used.  
+
+## Data cleaning  
+Any variable with more than 5% NA values are excluded. And the first seven irrelative variables are also excluded.
+
+## Principal component analysis
+Principal component analysis is performed on the data to select enough variables.
+
+# Modelling  
+70% data is used to build a random forest model while 30% data is retained to validate results after model building. 
+
+# Conclusion  
+Random Forest algorithm model were tested on cross-validation data, result shows 97.5% accuracy 95% CI : (0.9709, 0.979). Our Test data set comprises 20 cases. With an accuracy above 97% on our cross-validation data, it's safe to expect that very few, or none, of the test samples will be missclassified.
+
+
+# Codes and results
+## getting data
+```{r}
+pmldata <- read.csv("C:/Users/unicu/OneDrive/Stat/coursera/Practical Machine Learning/Project/pml-training.csv")
+pmltesting <- read.csv("C:/Users/unicu/OneDrive/Stat/coursera/Practical Machine Learning/Project/pml-testing.csv")	
+class(pmldata)
+str(pmldata)
+library(caret)
+```
+
+## cleaning data
+```{r}
+set.seed(113)
+train <- createDataPartition(y=pmldata$classe, p=0.7, list=FALSE)
+pmltraining <- pmldata[train,]
+validating <- pmldata[-train,]
+rm(train)
+library(stringr)
+sum(is.na(pmltraining))
+apply(pmltraining, 2, function(x){
+  (sum(!x=="NA", na.rm=TRUE))/(NROW(x))
+  })
+
+# exclude column with more than 95% NA
+temp1 <- pmltraining[,(apply(pmltraining, 2, function(x){
+  (sum(!x=="NA", na.rm=TRUE))/(NROW(x))
+  }))>=0.05]
+
+str(temp1)
+temp1[temp1==""] <- NA
+temp2 <- temp1[,(apply
+  (temp1, 2, function(x){
+      (sum(!x=="NA", na.rm=TRUE))/(NROW(x))
+      }
+  )  )>=0.05]
+sum(is.na(temp2))
+rm(temp1)
+
+temp2 <- temp2[,-c(1:7)]
+cleandata <- temp2
+rm(temp2)
+head(cleandata)
+```
+
+## PCA
+```{r}
+set.seed(113)
+preProc <- preProcess(cleandata[,-53],method="pca",thresh=.95)
+preProc
+preProc <- preProcess(cleandata[,-53],method="pca",pcaComp=26)
+preProc$rotation
+prncmp <- predict(preProc,cleandata)
+```
+
+## modelling with random forest
+```{r}
+set.seed(113)
+control <- trainControl(method = "cv", 5)
+modfit <- train(classe ~ ., method = "rf", data = prncmp, trControl = control, ntree = 150, prox=TRUE)
+modfit$finalModel
+```
+
+
+## cross validation
+```{r}
+names <- colnames(cleandata)
+validating <- validating[names]
+prncmpvld <- predict(preProc,validating)
+confusionMatrix(prncmpvld$classe,predict(modfit,prncmpvld))
+```
+
+
+## apply model to testing data
+```{r}
+pmltesting <- pmltesting[names[1:52]]
+prncmptesting <- predict(preProc,pmltesting[,1:52])
+predict(modfit,prncmptesting)
+```
+
